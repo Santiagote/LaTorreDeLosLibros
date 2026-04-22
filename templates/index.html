@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Book Catalog</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+
+<div class="layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <h2>Categorías</h2>
+        <button onclick="filtrar('Todos')">Todos</button>
+        <button onclick="filtrar('Educativo')">Educativo</button>
+        <button onclick="filtrar('Ficción')">Ficción</button>
+        <button onclick="filtrar('Fantasia')">Fantasia</button>
+        <button onclick="filtrar('Romance')">Romance</button>
+        <button onclick="filtrar('Terror')">Terror</button>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+
+        <div class="topbar">
+            <input type="text" id="buscador" placeholder="Buscar..." oninput="buscar()">
+            <button class="add-btn" onclick="abrirModal()">+ Agregar Libro</button>
+        </div>
+
+        <div class="grid" id="lista"></div>
+    </main>
+</div>
+
+<!-- MODAL -->
+<div class="modal" id="modal">
+    <div class="modal-content">
+        <h2 id="modal-title">Nuevo Libro</h2>
+
+        <input type="text" id="titulo" placeholder="Título">
+        <input type="text" id="autor" placeholder="Autor">
+        <select id="genero">
+            <option value="" disabled selected>Selecciona un género</option>
+            <option value="Educativo">Educativo</option>
+            <option value="Ficción">Ficción</option>
+            <option value="Fantasia">Fantasia</option>
+            <option value="Romance">Romance</option>
+            <option value="Terror">Terror</option>
+        </select>
+        <input type="file" id="imagen">
+
+        <div class="modal-buttons">
+            <button id="accion-formulario" onclick="guardarLibro()">Guardar</button>
+            <button onclick="cerrarModal()">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let libros = [];
+let librosOriginal = [];
+let libroEditando = null;
+
+function abrirModal() {
+    libroEditando = null;
+    document.getElementById("modal-title").innerText = "Nuevo Libro";
+    document.getElementById("accion-formulario").innerText = "Guardar";
+    document.getElementById("titulo").value = "";
+    document.getElementById("autor").value = "";
+    document.getElementById("genero").value = "";
+    document.getElementById("imagen").value = "";
+    document.getElementById("modal").style.display = "flex";
+}
+
+function cerrarModal() {
+    document.getElementById("modal").style.display = "none";
+}
+
+function abrirModalEditar(libro) {
+    libroEditando = libro;
+    document.getElementById("modal-title").innerText = "Editar Libro";
+    document.getElementById("accion-formulario").innerText = "Actualizar";
+    document.getElementById("titulo").value = libro.titulo;
+    document.getElementById("autor").value = libro.autor;
+    document.getElementById("genero").value = libro.genero;
+    document.getElementById("imagen").value = "";
+    document.getElementById("modal").style.display = "flex";
+}
+
+function abrirModalEditarPorId(id) {
+    const libro = libros.find(item => item.id === id);
+    if (libro) {
+        abrirModalEditar(libro);
+    }
+}
+
+/* CREATE */
+async function guardarLibro() {
+    const titulo = document.getElementById("titulo").value;
+    const autor = document.getElementById("autor").value;
+    const genero = document.getElementById("genero").value;
+    const file = document.getElementById("imagen").files[0];
+
+    if (!titulo || !autor || !genero) return;
+
+    const enviar = async (imagen = null) => {
+        const url = libroEditando ? `/libros/${libroEditando.id}` : "/libros";
+        const method = libroEditando ? "PUT" : "POST";
+
+        await fetch(url, {
+            method,
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                titulo,
+                autor,
+                genero,
+                imagen
+            })
+        });
+
+        cargarLibros();
+        cerrarModal();
+    };
+
+    if (file) {
+        const reader = new FileReader();
+
+        reader.onload = async function(e) {
+            await enviar(e.target.result);
+        };
+
+        reader.readAsDataURL(file);
+        return;
+    }
+
+    if (libroEditando) {
+        await enviar(libroEditando.imagen);
+        return;
+    }
+
+    await enviar(null);
+}
+
+/* READ */
+async function cargarLibros() {
+    const res = await fetch("/libros");
+    libros = await res.json();
+    librosOriginal = libros;
+    render(libros);
+}
+
+/* RENDER */
+function render(data) {
+    const lista = document.getElementById("lista");
+    lista.innerHTML = "";
+
+    data.forEach(l => {
+        const card = document.createElement("div");
+        card.className = "card";
+
+        card.innerHTML = `
+            <img src="${l.imagen}">
+            <h3>${l.titulo}</h3>
+            <p>${l.autor}</p>
+            <span>${l.genero}</span>
+            <button onclick="abrirModalEditarPorId(${l.id})">Editar</button>
+            <button onclick="eliminar(${l.id})">Eliminar</button>
+        `;
+
+        lista.appendChild(card);
+    });
+}
+
+/* DELETE */
+async function eliminar(id) {
+    await fetch(`/libros/${id}`, {
+        method: "DELETE"
+    });
+
+    cargarLibros();
+}
+
+/* BUSCAR */
+function buscar() {
+    const texto = document.getElementById("buscador").value.toLowerCase();
+
+    const filtrados = librosOriginal.filter(l =>
+        l.titulo.toLowerCase().includes(texto)
+    );
+
+    render(filtrados);
+}
+
+/* FILTRAR */
+function filtrar(genero) {
+    if (genero === "Todos") {
+        render(librosOriginal);
+        return;
+    }
+
+    const filtrados = librosOriginal.filter(l => l.genero === genero);
+    render(filtrados);
+}
+
+cargarLibros();
+</script>
+
+</body>
+</html>
